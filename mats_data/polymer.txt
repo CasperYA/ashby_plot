@@ -1,0 +1,49 @@
+Name 	Conductivity (S/m) 
+Acrylonitrile butadiene styrene (ABS)	10e-13
+Cellulose acetate (CA)	10e-10
+Chlorinated polyvinyl chloride (CPVC)	10e-13
+Ethylene tetrafluoroethylene (ETFE)	10e-15
+Fluorinated ethylene propylene (FEP)	10e-6
+Nylon 6 (PA6)	2*10e-11
+Nylon 11 (PA11)	10e-11
+Nylon 12 (PA12)	10e-11
+Nylon 46 (PA46)	10e-11
+Nylon 66 (PA66)	10e-11
+Perfluorinated alkoxy (PFA)	10e-16
+Phenol formaldehyde (PF)	10e-10
+Polyamide-imide (PAI)	10e-15
+Polyarylate resins (PAR)	10e-10
+Polybenzeneimidazole (PBI)	10e-11
+Polybutadiene (BR)	10e-13
+Polycarbonate (PC)	10e-14
+Polyether ether ketone (PEEK)	10e-14
+Polyetherimide (PEI)	10e-13
+Polyethersulfone (PESU)	10e-15
+High-density polyethylene (HDPE)	10e-13
+Low-density polyethylene (LDPE)	10e-13
+Medium-density polyethylene (MDPE)	10e-15
+Ultrahigh molecular weight polyethylene (UHMWPE)	10e-6
+Polyethylene naphthalate (PEN)	10e-13
+Polyethylene terephthalate (PET)	10e-12
+Polyhydroxybutyrate (PHB)	10e-14
+Polyimide (PI)	10e-16
+Polyisoprene (PIP)	10e-13
+Polymethyl methacrylate (PMMA)	10e-13
+Polymethylpentene (PMP)	10e-14
+Polyoxymethylene (POM)	10e-13
+Polyphenylene oxide (PPO)	5*10e-16
+Polyphenylene sulfide (PPS)	10e-12
+Polypropylene (PP atactic)	10e-14
+Polypropylene (PP isotactic)	10e-14
+Polypropylene (PP syndiotactic)	10e-14
+High-impact polystyrene (HIPS)	10e-14
+Polystyrene (PS)	10e-14
+Polysulfide rubber (PSR)	10e-6
+Polysulfone (PSU)	10e-14
+Polytetrafluoroethylene (PTFE)	10e-16
+Polyurethane (PUR)	10e-10
+Polyvinylidene chloride (PVDC)	10e-10
+Polyvinylidene fluoride (PVDF)	10e-12
+Polyvinyl fluoride (PVF)	10e-7
+Polyvinyl chloride (PVC)	10e-14
+Styrene-butadiene rubber (SBR)	10e-12
