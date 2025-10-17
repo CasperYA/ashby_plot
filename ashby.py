@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 
 # Load the file into a DataFrame
 Ni = pd.read_csv(
@@ -287,82 +288,166 @@ dataframes = {
 
 # --- 2) Plot each dataframe as a single bubble on an Ashby diagram ------------
 
-import numpy as np
-import matplotlib.pyplot as plt
-
-def get_conductivity_s_per_m(df):
+def _pick_conductivity_col(df):
     """
-    Return a 1D array of conductivity in S/m, inferring the correct column
-    and unit scaling from the column name.
+    Choose a conductivity column and its scale to S/m from the name.
+    Priority: Conductivity_10E6 (×1e6), Conductivity_10E7 (×1e7), Conductivity (S/m).
     """
-    # Candidates in order of preference
-    col = None
     if 'Conductivity_10E6' in df.columns:
-        col = 'Conductivity_10E6'
-        scale = 1e6
-    elif 'Conductivity_10E7' in df.columns:
-        col = 'Conductivity_10E7'
-        scale = 1e7
-    elif 'Conductivity' in df.columns:
-        col = 'Conductivity'
-        scale = 1.0
-    else:
-        raise ValueError("No conductivity column found in dataframe.")
+        return 'Conductivity_10E6', 1e6
+    if 'Conductivity_10E7' in df.columns:
+        return 'Conductivity_10E7', 1e7
+    if 'Conductivity' in df.columns:
+        return 'Conductivity', 1.0
+    return None, None
 
-    vals = df[col].astype(float) * scale
-    # Drop non-positive / NaN (log scale needs positive)
-    vals = vals.replace([np.inf, -np.inf], np.nan).dropna()
-    vals = vals[vals > 0]
-    return vals
+def _to_float_series(s):
+    """Coerce a pandas Series of messy numerics to float.
+    Handles cases like '5*10e-22', '3×10^7', '1,23', standard '1e-3', etc."""
+    def parse_val(v):
+        if isinstance(v, (int, float, np.floating)):
+            return float(v)
+        if v is None:
+            return np.nan
+        t = str(v).strip()
+        if t == "" or t.lower() in {"na", "nan", "none", "-", "—"}:
+            return np.nan
 
-def get_density_g_per_cm3(df):
-    if 'Density' not in df.columns:
-        raise ValueError("No Density column found in dataframe.")
-    dens = df['Density'].astype(float)
-    dens = dens.replace([np.inf, -np.inf], np.nan).dropna()
-    dens = dens[dens > 0]
-    return dens
+        # Use comma as decimal if no dot present: "1,23" -> "1.23"
+        if "," in t and "." not in t:
+            t = t.replace(",", ".")
 
-bubble_points = []
+        # Try standard float / scientific first
+        try:
+            return float(t)
+        except Exception:
+            pass
+
+        # Match a * 10^b (e.g., '3*10^7', '3×10^7', '3·10^7', '3 * 10 ** 7')
+        m = re.match(r'^\s*([+-]?\d*\.?\d+)\s*([*x×·])\s*10\s*(?:\^|\*\*)\s*([+-]?\d+)\s*$', t, re.I)
+        if m:
+            a = float(m.group(1)); b = int(m.group(3))
+            return a * (10.0 ** b)
+
+        # Match the nonstandard: a*10eB  (e.g., '5*10e-22' -> a * 10^(B+1))
+        m = re.match(r'^\s*([+-]?\d*\.?\d+)\s*([*x×·])\s*10[eE]\s*([+-]?\d+)\s*$', t)
+        if m:
+            a = float(m.group(1)); b = int(m.group(3))
+            return a * (10.0 ** (b + 1))
+
+        # Lone "10eB" (rare): treat as 10^(B+1)
+        m = re.match(r'^\s*10[eE]\s*([+-]?\d+)\s*$', t)
+        if m:
+            b = int(m.group(1))
+            return 10.0 ** (b + 1)
+
+        return np.nan
+
+    return s.apply(parse_val)
+
+def _extract_xy(df):
+    ccol, scale = _pick_conductivity_col(df)
+    if ccol is None or 'Density' not in df.columns:
+        return None, None
+
+    sub = df[[ccol, 'Density']].copy()
+
+    # Parse textual numbers safely
+    sub[ccol] = _to_float_series(sub[ccol]) * (scale if scale is not None else 1.0)
+    sub['Density'] = _to_float_series(sub['Density'])
+
+    # Clean and keep only positive, finite rows
+    sub = sub.replace([np.inf, -np.inf], np.nan).dropna()
+    m = (sub['Density'] > 0) & (sub[ccol] > 0)
+    sub = sub[m]
+    if sub.empty:
+        return None, None
+
+    x = sub['Density'].astype(float).values
+    y = sub[ccol].astype(float).values
+    return x, y
+
+
+def _convex_hull_monotone_chain(points):
+    """
+    Andrew's monotone chain convex hull (works on 2D np.array of shape (n,2)).
+    Returns hull points in counter-clockwise order without repeating the first point.
+    """
+    pts = np.array(points, dtype=float)
+    pts = pts[np.lexsort((pts[:,1], pts[:,0]))]  # sort by x, then y
+    if len(pts) <= 1:
+        return pts
+
+    def cross(o, a, b):
+        return (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0])
+
+    lower = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(tuple(p))
+    upper = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(tuple(p))
+    hull = np.array(lower[:-1] + upper[:-1], dtype=float)
+    return hull
+
+plt.figure(figsize=(10, 8))
+
+legend_handles = []
 for label, df in dataframes.items():
-    try:
-        sigma = get_conductivity_s_per_m(df)
-        rho   = get_density_g_per_cm3(df)
-        # Align lengths only where both present (inner-join on index if needed)
-        # If different lengths (common when merged), reduce to medians independently.
-        if len(sigma) == 0 or len(rho) == 0:
-            continue
-        sigma_med = float(np.median(sigma))
-        rho_med   = float(np.median(rho))
-        n = min(len(sigma), len(rho))  # conservative count
-        bubble_points.append((label, rho_med, sigma_med, n))
-    except Exception:
-        # Skip datasets missing required fields
+    x, y = _extract_xy(df)
+    if x is None:
         continue
 
-# Size bubbles by dataset size with a gentle scale factor
-if not bubble_points:
-    raise RuntimeError("No valid datasets to plot. Check columns/merges.")
+    # Work in log10 space for a proper Ashby hull
+    log_pts = np.column_stack((np.log10(x), np.log10(y)))
+    if log_pts.shape[0] == 1:
+        # Single point: draw a marker
+        xp, yp = 10**log_pts[0,0], 10**log_pts[0,1]
+        h = plt.plot([xp], [yp], marker='o', markersize=6, label=label)[0]
+        legend_handles.append(h)
+        continue
+    if log_pts.shape[0] == 2:
+        # Two points: draw a line segment
+        xp, yp = 10**log_pts[:,0], 10**log_pts[:,1]
+        h = plt.plot(xp, yp, linewidth=1.8, label=label)[0]
+        legend_handles.append(h)
+        continue
 
-labels, rho_vals, sigma_vals, counts = zip(*bubble_points)
-sizes = np.array(counts, dtype=float)
-sizes = 50.0 * (1.0 + np.log10(sizes))  # readable scaling
+    hull_log = _convex_hull_monotone_chain(log_pts)
+    if hull_log.shape[0] < 3:
+        xp, yp = 10**hull_log[:,0], 10**hull_log[:,1]
+        h = plt.plot(xp, yp, linewidth=1.8, label=label)[0]
+        legend_handles.append(h)
+        continue
 
-plt.figure(figsize=(9, 7))
-plt.scatter(rho_vals, sigma_vals, s=sizes, alpha=0.6, edgecolor='k', linewidth=0.5)
+    # Back to linear for plotting
+    hull_x = 10**hull_log[:,0]
+    hull_y = 10**hull_log[:,1]
 
-# Annotate each bubble
-for lbl, x, y, n in bubble_points:
-    plt.annotate(lbl, (x, y), xytext=(5, 5), textcoords='offset points', fontsize=9)
+    # Draw outline + light fill
+    [h] = plt.plot(hull_x.tolist() + [hull_x[0]],
+                   hull_y.tolist() + [hull_y[0]],
+                   linewidth=1.8, label=label)
+    plt.fill(hull_x, hull_y, alpha=0.12)
 
+    # Label near the hull centroid (in log space, then convert back)
+    cx, cy = 10**np.mean(hull_log[:,0]), 10**np.mean(hull_log[:,1])
+    # plt.annotate(label, (cx, cy), xytext=(4, 4),
+    #              textcoords='offset points', fontsize=9)
+    legend_handles.append(h)
+
+# Axes + cosmetics
 plt.xscale('log')
 plt.yscale('log')
 plt.xlabel('Density (g/cm³)')
 plt.ylabel('Electrical conductivity (S/m)')
-plt.title('Ashby diagram: conductivity vs density (one bubble per dataset)')
-
-# Nice grid on log axes
+plt.title('Ashby diagram: conductivity vs density — dataset envelopes')
 plt.grid(True, which='both', linestyle=':', linewidth=0.6, alpha=0.7)
-
+if legend_handles:
+    plt.legend(loc='best', frameon=True, fontsize=9)
 plt.tight_layout()
 plt.show()
