@@ -1,0 +1,6 @@
+Material	Conductivity	Density		Ultimate strength
+Ti	2.38*10e6	4506	900
+Al	3.5*10e7	2700	495
+Steel	6.99*10e6	7850	1027
+Mg	2.24*10e7	1738	380
+Ni	1.43*10e7	8900	1300
